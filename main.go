@@ -21,6 +21,26 @@ var fileName string
 func main() {
 	fileName = "expenses2021.txt"
 	ctx := context.Background()
+	expenseData := processFile(ctx, fileName)
+	WriteToDB(expenseData)
+	log.Println("completed")
+}
+
+/*
+	monthExpenseMap := make(map[string]int)
+	spenderExpenseMap := make(map[string]int)
+	//log.Printf("%s has spent %d in the month of %s for %s", spenderName, amount, monthYear, description)
+	if totalAmount, ok := monthExpenseMap[monthYear]; !ok {
+		monthExpenseMap[monthYear] = amount
+	} else {
+		monthExpenseMap[monthYear] = amount + totalAmount
+	}
+	if spenderTotal, ok := spenderExpenseMap[spenderName]; !ok {
+		spenderExpenseMap[spenderName] = amount
+	} else {
+		spenderExpenseMap[spenderName] = amount + spenderTotal
+	}
+
 	monthlyExpenses, spenderExpenses := processFile(ctx, fileName)
 	annualExpense := 0
 	for month, amount := range monthlyExpenses {
@@ -32,23 +52,30 @@ func main() {
 		log.Printf("%s has spent %d \n", name, amount)
 		annualExpense = annualExpense + amount
 	}
-	log.Println("completed")
+ */
+
+type ExpenseData struct {
+	month       string
+	year        string
+	spenderName string
+	amount      float64
+	description  string
 }
 
 /*
 Read the input file, process to a data structure and returns
 */
-func processFile(ctx context.Context, fileNameStr string) (map[string]int, map[string]int) {
+func processFile(ctx context.Context, fileNameStr string) []ExpenseData {
 	file, err := os.Open(fileNameStr)
 	if err != nil {
 		log.Fatal(ctx, err)
 	}
 	defer file.Close()
-	monthExpenseMap := make(map[string]int)
-	spenderExpenseMap := make(map[string]int)
+
 	scanner := bufio.NewScanner(file)
 	var errLineCount int
 	var totalLineCount int
+	var expenseData []ExpenseData
 	for scanner.Scan() {
 		//fmt.Println(scanner.Text())
 		//txtlines = append(txtlines, scanner.Text())
@@ -57,24 +84,13 @@ func processFile(ctx context.Context, fileNameStr string) (map[string]int, map[s
 			//log.Println("this line was deleted ")
 			continue
 		}
-		//monthYear, spenderName, amount, description, err := regexer(currLine)
-		monthYear, spenderName, amount, _, err := regexer(currLine)
+		expense, err := regexer(currLine)
 		if err != nil {
 			log.Printf("error %s for ", err.Error(), scanner.Text())
 			errLineCount = errLineCount + 1
 			continue
 		}
-		//log.Printf("%s has spent %d in the month of %s for %s", spenderName, amount, monthYear, description)
-		if totalAmount, ok := monthExpenseMap[monthYear]; !ok {
-			monthExpenseMap[monthYear] = amount
-		} else {
-			monthExpenseMap[monthYear] = amount + totalAmount
-		}
-		if spenderTotal, ok := spenderExpenseMap[spenderName]; !ok {
-			spenderExpenseMap[spenderName] = amount
-		} else {
-			spenderExpenseMap[spenderName] = amount + spenderTotal
-		}
+		expenseData = append(expenseData, expense)
 		totalLineCount = totalLineCount + 1
 	}
 	//log.Printf(" number of lines %d ", len(txtlines))
@@ -83,47 +99,51 @@ func processFile(ctx context.Context, fileNameStr string) (map[string]int, map[s
 		log.Fatal(ctx, err)
 	}
 	log.Printf("errors in %d lines ", errLineCount)
-	return monthExpenseMap, spenderExpenseMap
+	return expenseData
 }
 
-func WriteToDB() {
-
+func WriteToDB(data []ExpenseData) {
+	
 }
 
-func regexer(str string) (string, string, int, string, error) {
+func regexer(str string) (ExpenseData, error) {
 	regexpPattern := "\\d{2}\\/(\\d{2})\\/(\\d{4}),\\s+\\d{2}:\\d{2}\\s+-\\s+(\\w+):\\s+(\\d+)\\s+(.*)"
 	var month string
 	var spenderName string
-	var amount int
+	var amount float64
 	var description string
 	var year string
-	monthYear := month + "_" + year
-
+	var expense ExpenseData
 	re, err := regexp.Compile(regexpPattern)
 	if err != nil {
 		log.Println("error ", err)
-		return month, spenderName, amount, description, err
+		return expense, err
 	}
 	output := re.FindAllStringSubmatch(str, -1)
 	if len(output) == 0 {
-		return month, spenderName, amount, description, errors.New("err in line parsing")
+		return expense, errors.New("err in line parsing")
 	}
 	if len(output[0]) < 5 {
-		return month, spenderName, amount, description, errors.New("err in line parsing")
+		return expense, errors.New("err in line parsing")
 	}
 
-	month = monthConvertor(output[0][1])
+	month = output[0][1]
 	year = output[0][2]
 	spenderName = output[0][3]
-	amount, err = strconv.Atoi(output[0][4])
+	amount, err = strconv.ParseFloat(output[0][4], 64)
 	if err != nil {
-		return monthYear, spenderName, amount, description, err
+		return expense, err
 	}
-	monthYear = month + "_" + year
 	description = output[0][5]
-	return monthYear, spenderName, amount, description, err
+	expense.month = month
+	expense.year = year
+	expense.spenderName = spenderName
+	expense.amount = amount
+	expense.description = description
+	return expense, err
 }
 
+//monthStr = monthConvertor(month)
 func monthConvertor(str string) string {
 	jan := "January"
 	feb := "February"
